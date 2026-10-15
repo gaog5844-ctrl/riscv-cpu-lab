@@ -11,7 +11,7 @@
 - [x] P2：1KB 两路 32 字节行 LRU 写回/写分配缓存、64 项 BHT/BTB，开关组合和等待测试通过。
 - [x] P3：xadd8/xadd16/xdot8，自定义 Spike 参考扩展及边界/随机/依赖测试通过。
 - [x] P4：标量/SIMD 点积、数组加法、矩阵向量乘法，正确性一致，公开周期和指令统计。
-- [ ] P5：干净检出和 GitHub Actions 通过，中文文档、波形与最终审计完成。
+- [x] P5：干净检出和 GitHub Actions 通过，中文文档、波形与最终审计完成。
 
 不以纯解释器代替 RTL CPU，不以单指令测试代替流水线测试，不以预置结果或仅打印 PASS 代替比较。不删减失败场景来获得通过。
 
@@ -28,7 +28,10 @@
 - 本地 make doctor test bench wave：正常返回；13,414 运算检查、139 缓存检查、10 预测检查。
 - 主回归 46 配置、33,003 次正常提交逐项匹配 Spike；6 组冒烟另计。
 - 24 组标量/SIMD 基准通过独立数学结果、Spike、完整 RAM 三重检查。
-- 功能提交 a4c4a53 的 [GitHub Actions](https://github.com/gaog5844-ctrl/riscv-cpu-lab/actions/runs/38757609741) 全部通过；最终文档提交仍按 P5 再验收。
+- 功能提交 a4c4a53 的 [GitHub Actions](https://github.com/gaog5844-ctrl/riscv-cpu-lab/actions/runs/38757609741) 全部通过。
+- 文档/入口提交 7b36020 的 [GitHub Actions](https://github.com/gaog5844-ctrl/riscv-cpu-lab/actions/runs/38759320761) 全部通过。
+- 从 GitHub 新克隆至独立目录，无旧 build，依次执行 Windows run.ps1 doctor/test/bench/wave，返回 CLEAN_CHECK_PASS；46 组回归及 24 组基准与原目录一致。保留本机副本 D:/Projects/riscv-cpu-lab-cleancheck-20261015。
+- 所有仓库内 Markdown 链接检查通过；git 无未提交源码，原 PDF 和私有资料不在跟踪文件列表。
 - 新 CPU 在 Artix-7 上的 Vivado 独立综合重试异常退出 -1073740940，未生成综合通过标记；原 Kintex-7 器件支持也未安装。记录于 build/synth。该可选上板前置问题不混入仿真 PASS。
 
 ## 本期不交付

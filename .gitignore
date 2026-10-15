@@ -1,0 +1,12 @@
+build/
+.venv/
+__pycache__/
+.pytest_cache/
+*.fst
+*.vcd
+*.jou
+*.log
+.Xil/
+obj_dir/
+local/
+*.pdf

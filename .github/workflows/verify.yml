@@ -1,0 +1,37 @@
+name: RTL verification
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rtl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: System dependencies
+        run: sudo bash tools/install-system.sh
+      - name: Cache pinned Spike and Python environment
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/opt/riscv-cpu-lab
+          key: ubuntu2404-spike-f8a060b7-pytest835-elf032
+      - name: Build pinned reference toolchain
+        run: |
+          if [ ! -x "$HOME/.local/opt/riscv-cpu-lab/spike/bin/spike" ]; then
+            bash tools/install-user.sh
+          fi
+      - name: Verify environment and RTL
+        run: make doctor test
+      - name: Publish verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification
+          path: |
+            build/*.json
+            build/*.csv
+            build/*.fst
+            build/*.txt

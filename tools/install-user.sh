@@ -6,13 +6,19 @@ lab_tools="$HOME/.local/opt/riscv-cpu-lab"
 lab_cache="$HOME/.cache/riscv-cpu-lab"
 spike_revision=f8a060b7bea8da6f738f193ed1b66b665978d092
 mkdir -p "$lab_tools" "$lab_cache" build
-if [ ! -d "$lab_cache/spike-src/.git" ]; then
-  git clone https://github.com/riscv-software-src/riscv-isa-sim.git "$lab_cache/spike-src"
+if [ "$#" -gt 0 ]; then
+  printf '25efb028e472a86deaa40eba01f624f64ae25c16509a29f454c375638b5743d4  %s\n' "$1" | sha256sum -c -
+  mkdir -p "$lab_cache/spike-src"
+  tar -xzf "$1" -C "$lab_cache/spike-src" --strip-components=1
+else
+  if [ ! -d "$lab_cache/spike-src/.git" ]; then
+    git clone https://github.com/riscv-software-src/riscv-isa-sim.git "$lab_cache/spike-src"
+  fi
+  git -C "$lab_cache/spike-src" checkout --detach "$spike_revision"
 fi
-git -C "$lab_cache/spike-src" checkout --detach "$spike_revision"
 mkdir -p "$lab_cache/spike-build"
 cd "$lab_cache/spike-build"
-"$lab_cache/spike-src/configure" --prefix="$lab_tools/spike" --enable-commitlog
+"$lab_cache/spike-src/configure" --prefix="$lab_tools/spike"
 make -j2
 make install
 cd "$lab_root"

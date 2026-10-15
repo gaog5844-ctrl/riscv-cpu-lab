@@ -23,5 +23,9 @@ for name, cmd in commands.items():
         results[name] = {"path": found, "version": lines[0] if lines else "", "exit": p.returncode}
     else:
         results[name] = {"missing": True}
-print(json.dumps(results, indent=2, ensure_ascii=False))
+serialized=json.dumps(results, indent=2, ensure_ascii=False)
+build=Path(__file__).resolve().parents[1]/"build"
+build.mkdir(exist_ok=True)
+(build/"doctor.json").write_text(serialized+"\n")
+print(serialized)
 raise SystemExit(1 if any(r.get("missing") or r.get("exit", 0) != 0 for r in results.values()) else 0)

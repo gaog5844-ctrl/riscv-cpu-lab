@@ -25,6 +25,8 @@ loop:
     li t4, 70
     bne t2, t4, fail
     li a0, 0
+.globl test_end
+test_end:
     ebreak
 fail:
     li a0, 1

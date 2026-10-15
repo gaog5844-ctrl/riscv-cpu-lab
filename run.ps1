@@ -3,6 +3,10 @@ param(
     [string]$Task='test'
 )
 $ErrorActionPreference='Stop'
+if ($Task -eq 'synth') {
+    & (Join-Path $PSScriptRoot 'tools/synth.ps1')
+    exit $LASTEXITCODE
+}
 $windowsRoot=$PSScriptRoot.Replace('\','/')
 $linuxRoot=(& wsl -d Ubuntu-24.04 -- wslpath -u $windowsRoot).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve project path in WSL' }

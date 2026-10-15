@@ -1,4 +1,4 @@
-#include "Vrv32_core.h"
+#include "Vrv32_system.h"
 #include "verilated.h"
 #include "verilated_fst_c.h"
 #include <array>
@@ -21,10 +21,12 @@ struct Transaction {
 };
 int main(int argc, char** argv) {
     try {
-        std::string image, output="build/trace.csv", wave, summary="build/stats.json";
-        unsigned latency=1;
+        std::string image, output="build/trace.csv", wave, summary="build/stats.json", dump;
+        unsigned latency=1, jitter=0;
+        uint32_t random_state=1, fault_address=0;
+        bool fault_read=false,fault_write=false;
         uint64_t limit=1000000;
-        bool prediction=true;
+        bool prediction=true,cache=true;
         for(int i=1;i<argc;i++) {
             std::string arg=argv[i];
             auto value=[&]() -> std::string {
@@ -35,9 +37,15 @@ int main(int argc, char** argv) {
             else if(arg=="--trace") output=value();
             else if(arg=="--stats") summary=value();
             else if(arg=="--wave") wave=value();
+            else if(arg=="--dump") dump=value();
             else if(arg=="--latency") latency=std::stoul(value());
+            else if(arg=="--jitter") jitter=std::stoul(value());
+            else if(arg=="--seed") random_state=std::stoul(value());
+            else if(arg=="--fault-read") {fault_address=std::stoul(value(),nullptr,0);fault_read=true;}
+            else if(arg=="--fault-write") {fault_address=std::stoul(value(),nullptr,0);fault_write=true;}
             else if(arg=="--limit") limit=std::stoull(value());
             else if(arg=="--no-predict") prediction=false;
+            else if(arg=="--no-cache") cache=false;
             else throw std::runtime_error("unknown argument: "+arg);
         }
         if(image.empty() || latency<1) throw std::runtime_error("--image required, latency must be >=1");
@@ -65,7 +73,7 @@ int main(int argc, char** argv) {
         auto context=std::make_unique<VerilatedContext>();
         context->commandArgs(argc,argv);
         if(!wave.empty()) context->traceEverOn(true);
-        auto top=std::make_unique<Vrv32_core>(context.get());
+        auto top=std::make_unique<Vrv32_system>(context.get());
         std::unique_ptr<VerilatedFstC> fst;
         if(!wave.empty()) {
             fst=std::make_unique<VerilatedFstC>();
@@ -77,14 +85,18 @@ int main(int argc, char** argv) {
             context->timeInc(1);
         };
         top->reset=1; top->predictor_enable=prediction;
+        top->cache_enable=cache;
         top->i_req_ready=0; top->i_rsp_valid=0; top->i_rsp_data=0; top->i_rsp_error=0;
         top->d_req_ready=0; top->d_rsp_valid=0; top->d_rsp_data=0; top->d_rsp_error=0;
-        top->fence_ready=1;
         for(int n=0;n<3;n++) {edge(false);edge(true);}
         top->reset=0;
         Transaction it,dt;
+        auto delay=[&]() -> unsigned {
+            random_state^=random_state<<13; random_state^=random_state>>17; random_state^=random_state<<5;
+            return latency+(jitter ? random_state%(jitter+1) : 0);
+        };
         std::array<uint32_t,32> registers{};
-        uint64_t commits=0;
+        uint64_t commits=0,reads=0,writes=0,mmio_writes=0;
         uint32_t last_cause=0,last_tval=0,last_pc=0;
         for(uint64_t cycle=0;cycle<limit && !top->halted;cycle++) {
             top->clk=0;
@@ -93,21 +105,25 @@ int main(int argc, char** argv) {
             top->i_rsp_error=it.valid && !valid_addr(it.address);
             top->d_rsp_valid=dt.valid && dt.due<=cycle;
             top->d_rsp_data=read(dt.address);
-            top->d_rsp_error=dt.valid && !valid_addr(dt.address) &&
-                dt.address!=0x10000000u && dt.address!=0x10000004u;
-            top->i_req_ready=!it.valid;
-            top->d_req_ready=!dt.valid;
+            const bool data_error=dt.valid &&
+                ((!valid_addr(dt.address) && dt.address!=0x10000000u && dt.address!=0x10000004u) ||
+                 (dt.address==fault_address && ((dt.strobe && fault_write) || (!dt.strobe && fault_read))));
+            top->d_rsp_error=data_error;
+            const bool i_gate=!jitter || (cycle%7>=2);
+            const bool d_gate=!jitter || (cycle%5>=2);
+            top->i_req_ready=!it.valid && i_gate;
+            top->d_req_ready=!dt.valid && d_gate;
             top->eval();
             const bool ia=top->i_rsp_valid && top->i_rsp_ready;
             const bool da=top->d_rsp_valid && top->d_rsp_ready;
             // 同周期消耗旧响应并接收新请求，仍保持最多一个在途事务。
-            if(ia) top->i_req_ready=1;
-            if(da) top->d_req_ready=1;
+            if(ia) top->i_req_ready=i_gate;
+            if(da) top->d_req_ready=d_gate;
             top->eval();
             const bool ir=top->i_req_valid && top->i_req_ready;
             const bool dr=top->d_req_valid && top->d_req_ready;
-            Transaction next_i{true,cycle+latency,top->i_req_addr,0,0};
-            Transaction next_d{true,cycle+latency,top->d_req_addr,top->d_req_wdata,top->d_req_wstrb};
+            Transaction next_i{true,cycle+(ir?delay():latency),top->i_req_addr,0,0};
+            Transaction next_d{true,cycle+(dr?delay():latency),top->d_req_addr,top->d_req_wdata,top->d_req_wstrb};
             if(top->commit_valid) {
                 trace<<std::dec<<cycle<<','<<std::hex<<top->commit_pc<<','<<top->commit_insn<<','
                      <<top->commit_next_pc<<','<<unsigned(top->commit_rd)<<','<<top->commit_data<<','
@@ -122,18 +138,33 @@ int main(int argc, char** argv) {
             }
             edge(false); edge(true);
             if(ia) it.valid=false;
-            if(da) {if(!top->reset) write(dt);dt.valid=false;}
+            if(da) {
+                if(!data_error && dt.strobe) {
+                    write(dt);
+                    if(dt.address==0x10000000u || dt.address==0x10000004u) mmio_writes++;
+                }
+                dt.valid=false;
+            }
             if(ir) it=next_i;
-            if(dr) dt=next_d;
+            if(dr) {dt=next_d;if(dt.strobe) writes++;else reads++;}
         }
         top->final();
         if(fst) fst->close();
+        if(!dump.empty()) {
+            std::ofstream memory_dump(dump,std::ios::binary);
+            if(!memory_dump || !memory_dump.write(reinterpret_cast<const char*>(mem.data()),mem.size()))
+                throw std::runtime_error("cannot write memory dump");
+        }
         std::ofstream stats(summary);
         if(!stats) throw std::runtime_error("cannot open summary");
         stats<<"{\n\"halted\":"<<(top->halted?"true":"false")
              <<",\"cycles\":"<<top->cycles<<",\"retired\":"<<commits
              <<",\"stalls\":"<<top->stalls<<",\"load_stalls\":"<<top->load_stalls
              <<",\"mispredictions\":"<<top->mispredictions<<",\"memory_latency\":"<<latency
+             <<",\"jitter\":"<<jitter<<",\"backend_reads\":"<<reads<<",\"backend_writes\":"<<writes
+             <<",\"mmio_writes\":"<<mmio_writes<<",\"predictor_enabled\":"<<(prediction?"true":"false")
+             <<",\"cache_hits\":"<<top->cache_hits<<",\"cache_misses\":"<<top->cache_misses
+             <<",\"cache_writebacks\":"<<top->cache_writebacks<<",\"cache_enabled\":"<<(cache?"true":"false")
              <<",\"trap_cause\":"<<last_cause<<",\"trap_tval\":"<<last_tval
              <<",\"trap_pc\":"<<last_pc<<",\"a0\":"<<registers[10]<<"\n}\n";
         if(!top->halted) throw std::runtime_error("CPU timeout");

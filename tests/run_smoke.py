@@ -6,7 +6,7 @@ root = Path(__file__).resolve().parents[1]
 for latency in (1, 2, 7):
     for predictor in (True, False):
         name = f"smoke-l{latency}-p{int(predictor)}"
-        args = ["build/obj/Vrv32_core", "--image", "build/smoke.bin",
+        args = ["build/obj/Vrv32_system", "--image", "build/smoke.bin",
                 "--trace", f"build/{name}.csv", "--stats", f"build/{name}.json",
                 "--latency", str(latency)]
         if not predictor:

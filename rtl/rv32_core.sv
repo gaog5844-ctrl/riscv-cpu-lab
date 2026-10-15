@@ -22,6 +22,8 @@ module rv32_core #(
     input logic d_rsp_error,
     output logic fence_valid,
     input logic fence_ready,
+    input logic fence_error,
+    input logic [31:0] fence_error_addr,
     output logic commit_valid, commit_trap,
     output logic [31:0] commit_pc, commit_insn, commit_next_pc,
     output logic [4:0] commit_rd,
@@ -79,7 +81,7 @@ module rv32_core #(
     logic m_done,m_fire,mem_error,redirect,flush_front,wb_trap;
     logic [3:0] m_strb;
     logic [31:0] m_write_data,m_value;
-    logic div_busy,div_done,div_start,div_started,div_saved;
+    logic div_busy,div_done,div_start,div_started,div_saved,div_operands_ready;
     logic [31:0] div_result,div_saved_result;
     logic signed [32:0] mul_a,mul_b;
     logic signed [65:0] mul_result;
@@ -170,13 +172,18 @@ module rv32_core #(
         end
     end
     assign ex_is_div=e_valid && e.m && e.insn[14];
-    assign div_start=ex_is_div && !div_started && !div_busy && !wb_trap && !mem_error;
+    // 除法器在 start 沿锁存操作数，不同于每周期重算的组合 ALU。
+    // load-use 的 ID 气泡不足以覆盖任意长缓存等待：必须等 MEM 的生产者可前递。
+    assign div_operands_ready=!(m_valid && m.load && !m_done && m.rd!=0 &&
+                               ((e.use1 && e.rs1==m.rd) || (e.use2 && e.rs2==m.rd)));
+    assign div_start=ex_is_div && div_operands_ready && !div_started && !div_busy && !wb_trap && !mem_error;
     assign ex_complete=!ex_is_div || div_saved || div_done;
     assign m_done=m.trap || (!(m.load || m.store || m.fence)) ||
                   ((m.load || m.store) && m_sent && d_rsp_valid) ||
                   (m.fence && fence_ready);
     assign m_fire=m_valid && m_done && !halted && !wb_trap;
-    assign mem_error=m_fire && (m.load || m.store) && !m.trap && d_rsp_error;
+    assign mem_error=m_fire && !m.trap &&
+                     (((m.load || m.store) && d_rsp_error) || (m.fence && fence_error));
     assign ex_fire=e_valid && ex_complete && (!m_valid || m_done) && !halted && !wb_trap && !mem_error;
     assign ex_allow=!e_valid || ex_fire;
     assign load_hazard=e_valid && e.load && e.rd!=0 &&
@@ -211,6 +218,16 @@ module rv32_core #(
         d_req_wstrb=m.store ? m_strb : 0;
         d_req_wdata=m_write_data;
     end
+`ifndef SYNTHESIS
+    always_ff @(posedge clk) if(!reset) begin
+        assert(regs[0]==0) else $fatal(1,"x0 changed");
+        assert(!(m_valid && m.load && m.store)) else $fatal(1,"MEM is both load and store");
+        assert(!(commit_valid && commit_trap && (commit_rd!=0 || commit_mem_wstrb!=0)))
+            else $fatal(1,"faulting retirement has architectural write");
+        assert(!(div_start && !div_operands_ready)) else $fatal(1,"division captured stale load operand");
+        assert(!(id_fire && load_hazard)) else $fatal(1,"load-use dependency entered EX");
+    end
+`endif
     always_ff @(posedge clk) begin
         if(reset) begin
             for(integer r=0;r<32;r++) regs[r]<=0;
@@ -234,8 +251,8 @@ module rv32_core #(
                 if(m_fire) begin
                     w.pc<=m.pc; w.insn<=m.insn; w.npc<=m.npc; w.rd<=m.rd; w.we<=m.we;
                     w.value<=m_value; w.trap<=m.trap || mem_error;
-                    w.cause<=mem_error ? (m.store ? 7 : 5) : m.cause;
-                    w.tval<=mem_error ? m.mem_addr : m.tval;
+                    w.cause<=mem_error ? (m.load ? 5 : 7) : m.cause;
+                    w.tval<=mem_error ? (m.fence ? fence_error_addr : m.mem_addr) : m.tval;
                     w.addr<=(m.load || m.store) ? m.mem_addr : 0;
                     w.store_data<=m.store ? m_write_data : 0;
                     w.strb<=(m.store && !m.trap && !mem_error) ? m_strb : 0;

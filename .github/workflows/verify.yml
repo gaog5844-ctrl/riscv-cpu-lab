@@ -24,7 +24,7 @@ jobs:
             bash tools/install-user.sh
           fi
       - name: Verify environment and RTL
-        run: make doctor test
+        run: make doctor test bench wave
       - name: Publish verification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -35,3 +35,4 @@ jobs:
             build/*.csv
             build/*.fst
             build/*.txt
+            build/*.md

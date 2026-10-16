@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="310" viewBox="0 0 900 310">
+  <rect width="900" height="310" fill="white"/>
+  <g font-family="Arial,sans-serif" font-size="15" fill="#172b3a">
+    <g fill="#f1f5f8" stroke="#526b83"><rect x="20" y="112" width="108" height="54" rx="4"/><rect x="190" y="112" width="116" height="54" rx="4"/><rect x="365" y="30" width="180" height="54" rx="4"/><rect x="365" y="198" width="180" height="54" rx="4"/><rect x="600" y="198" width="180" height="54" rx="4"/><rect x="655" y="112" width="160" height="54" rx="4"/></g>
+    <text x="57" y="145">IDLE</text><text x="216" y="145">LOOKUP</text><text x="405" y="53">BYPASS_REQ</text><text x="401" y="73">BYPASS_WAIT</text><text x="421" y="221">WB_REQ</text><text x="417" y="241">WB_WAIT</text><text x="644" y="221">REFILL_REQ</text><text x="640" y="241">REFILL_WAIT</text><text x="692" y="145">RESPONSE</text>
+    <g fill="none" stroke="#34465a" stroke-width="1.6"><path d="M128 139 H190"/><path d="M74 112 V57 H365"/><path d="M545 57 H735 V112"/><path d="M306 139 H655"/><path d="M248 166 V225 H365"/><path d="M306 158 H575 V216 H600"/><path d="M545 238 H600"/><path d="M690 252 V280 H248 V166"/><path d="M815 139 H864 V10 H74 V112"/></g>
+    <g fill="#34465a"><path d="M190 139 l-8 -4 v8 z"/><path d="M365 57 l-8 -4 v8 z"/><path d="M735 112 l-4 -8 h8 z"/><path d="M655 139 l-8 -4 v8 z"/><path d="M365 225 l-8 -4 v8 z"/><path d="M600 216 l-8 -4 v8 z"/><path d="M600 238 l-8 -4 v8 z"/><path d="M248 166 l-4 8 h8 z"/><path d="M74 112 l-4 -8 h8 z"/></g>
+    <g font-size="12"><text x="132" y="131">cached</text><text x="166" y="48">uncached / MMIO</text><text x="465" y="131">hit</text><text x="276" y="217">dirty victim</text><text x="411" y="177">clean miss</text><text x="372" y="274">line filled: retry lookup</text></g>
+  </g>
+</svg>

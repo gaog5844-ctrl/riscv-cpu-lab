@@ -77,8 +77,8 @@ def main():
                 measurement="Retirement of kernel_start through before kernel_end; includes call/return and FENCE writeback",
                 configurations=results,comparisons=comparisons)
     (BUILD/"benchmarks.json").write_text(json.dumps(report,indent=2)+"\n")
-    lines=["# RTL 仿真实测（生成文件）","",
-           "同一数据地址、GCC 参数及内存设置；不含频率、功耗或板级性能推断。","",
+    lines=["# SIMD 性能测试结果","",
+           "标量与 SIMD 版本使用相同的数据地址、GCC 参数和内存设置。表中统计仿真周期，未测板级频率和功耗。","",
            "|内核|缓存|后端延迟|标量周期|SIMD 周期|周期加速比|标量/SIMD 指令数|",
            "|---|---|---|---|---|---|---|"]
     for r in comparisons:

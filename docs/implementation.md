@@ -1,43 +1,47 @@
-# 实施记录与验收清单
+# 开发记录
 
-## 最终目标
+## 2026-10-15：仿真版本
 
-公开仓库 `gaog5844-ctrl/riscv-cpu-lab`，可复现本地和 CI 测试；交付五级 RV32IM、1KB 两路缓存、64 项 BHT/BTB、自定义 SIMD、中文说明、波形样例和真实性能对比。
+完成五级 RV32IM 核心、1KB 两路数据缓存和 64 项 BHT/BTB，并加入 `xadd8`、`xadd16`、`xdot8` 三条指令。仓库同时包含 C 调用封装、Spike 扩展、测试程序和波形生成脚本。
 
-## 阶段门槛
+开发环境为 Windows 11、Ubuntu 24.04 WSL2，处理器 i5-11320H，内存约 16GB。具体版本见 [环境配置](toolchain.md)。
 
-- [x] P0：工具安装完成，doctor 和模块测试通过，公开仓库和 CI 建立。
-- [x] P1：五级 RV32IM、前递/停顿/冲刷、终止式精确 trap 接口、逐提交参考对照通过。
-- [x] P2：1KB 两路 32 字节行 LRU 写回/写分配缓存、64 项 BHT/BTB，开关组合和等待测试通过。
-- [x] P3：xadd8/xadd16/xdot8，自定义 Spike 参考扩展及边界/随机/依赖测试通过。
-- [x] P4：标量/SIMD 点积、数组加法、矩阵向量乘法，正确性一致，公开周期和指令统计。
-- [x] P5：干净检出和 GitHub Actions 通过，中文文档、波形与最终审计完成。
+### 测试记录
 
-不以纯解释器代替 RTL CPU，不以单指令测试代替流水线测试，不以预置结果或仅打印 PASS 代替比较。不删减失败场景来获得通过。
+`make doctor test bench wave` 全部通过，结果如下：
 
-## 当前环境调查（2026-10-15）
+- 运算单元比较 13,414 次，缓存检查 139 项，预测器检查 10 项。
+- 主回归共 46 组配置，33,003 次正常指令提交与 Spike 一致；另有 6 组冒烟配置。
+- 24 组性能测试均通过数学结果检查、Spike 比较和 FENCE 后的 RAM 比较。
+- 从 GitHub 重新克隆，在没有旧构建产物的目录中依次运行 `run.ps1 doctor/test/bench/wave`，回归和性能结果与原目录一致。检查副本保留在 `D:/Projects/riscv-cpu-lab-cleancheck-20261015`。
+- Markdown 本地链接检查通过。原 PDF 和私有平台资料未加入 Git。
 
-- Windows 11，i5-11320H（4 核/8 线程），约 16GB RAM；D 盘当时剩余约 75GB。
-- Ubuntu 24.04 WSL2 位于 D 盘；GCC 13.2 RV32IM 编译检查通过。
-- Vivado 2026.1 和 ModelSim 10.5b 可启动。
-- Vivado 最小四位加法器综合在模块综合后异常退出（exit 1）；未完成总体综合。仿真阶段不依赖它；上板前仍需修复。
-- 未取得原 CPU RTL 和竞业达板级工程。本项目独立实现，仿真系统不冒充原平台。
+对应的 CI 记录：
 
-## 当前验收证据
+|提交|内容|结果|
+|---|---|---|
+|`a4c4a53`|缓存、Spike 对照和 SIMD 基准|[通过](https://github.com/gaog5844-ctrl/riscv-cpu-lab/actions/runs/38757609741)|
+|`7b36020`|文档和运行入口|[通过](https://github.com/gaog5844-ctrl/riscv-cpu-lab/actions/runs/38759320761)|
+|`086b3c9`|main 分支仿真版本|[通过](https://github.com/gaog5844-ctrl/riscv-cpu-lab/actions/runs/38759877042)|
 
-- 本地 make doctor test bench wave：正常返回；13,414 运算检查、139 缓存检查、10 预测检查。
-- 主回归 46 配置、33,003 次正常提交逐项匹配 Spike；6 组冒烟另计。
-- 24 组标量/SIMD 基准通过独立数学结果、Spike、完整 RAM 三重检查。
-- 功能提交 a4c4a53 的 [GitHub Actions](https://github.com/gaog5844-ctrl/riscv-cpu-lab/actions/runs/38757609741) 全部通过。
-- 文档/入口提交 7b36020 的 [GitHub Actions](https://github.com/gaog5844-ctrl/riscv-cpu-lab/actions/runs/38759320761) 全部通过。
-- 从 GitHub 新克隆至独立目录，无旧 build，依次执行 Windows run.ps1 doctor/test/bench/wave，返回 CLEAN_CHECK_PASS；46 组回归及 24 组基准与原目录一致。保留本机副本 D:/Projects/riscv-cpu-lab-cleancheck-20261015。
-- 所有仓库内 Markdown 链接检查通过；git 无未提交源码，原 PDF 和私有资料不在跟踪文件列表。
-- 新 CPU 在 Artix-7 上的 Vivado 独立综合重试异常退出 -1073740940，未生成综合通过标记；原 Kintex-7 器件支持也未安装。记录于 build/synth。该可选上板前置问题不混入仿真 PASS。
+### Vivado 问题
 
-## 本期不交付
+原报告使用的 `xc7k325tffg900-2` 器件支持未安装。改用已安装的 `xc7a35tcsg324-1` 后，各模块综合结束，但 Vivado 随后以 `-1073740940` 退出。最小四位加法器工程也有类似现象；当日未完成综合。
 
-完整 RVV/P、双发射、更深流水、CSR/中断/OS、原远程板卡外设、可下载位流和 MHz/功耗结论。先交付有独立参考、可反复测量的五级 + INT8 SIMD 基线。
+日志保存在 `build/synth/`。目前没有位流、布局布线结果或上板测试记录。
 
-## 恢复规则
+## 2026-10-16：综合与设计报告
 
-先检查本地 git 状态、安装任务、已有报告和远程 CI，再继续未完成阶段。已有目标和失败测试必须保留。构建产物置于 build 或 D 盘 WSL 缓存，源码不得放入实验报告父仓库。
+为 RTL 引擎设置独立英文临时目录，复制后续优化使用的 `elab.rtd` 后，完整 CPU 综合通过。DCP 保存时的附加元数据路径错误，通过将 `-tempDir` 参数中的反斜杠改为 `/` 消除；独立保存、重新打开 DCP 的复测无 ERROR，读回 32,785 个层次单元和一个 clk 约束。
+
+本次综合使用 12,221 个 LUT、15,736 个触发器和 4 个 DSP，没有推断出 RAM。10ns 约束下 WNS 为 -5.763ns，尚未达到时序目标。资源和关键路径记录在 [设计报告](design-report.md)。
+
+综合脚本改为每次新建结果目录，并检查退出码、ERROR 日志、报告、DCP 和回读结果，避免使用旧的通过标记。`make doctor test bench wave` 再次通过，回归与性能 JSON 的 SHA-256 与修改前相同。此次未修改 RTL。
+
+## 待办
+
+- 调整缓存 RAM 推断和乘法相关关键路径，减少面积及组合延迟。
+- 确认可用开发板及其时钟、引脚、存储器和外设配置，再做板级适配。
+- 测试热缓存、突发访存后端和更大输入规模下的性能。
+
+当前版本未实现更深流水、双发射、完整 RVV/P、CSR、中断或操作系统支持。后续是否加入这些功能，需要结合综合结果和性能瓶颈决定。

@@ -1,43 +1,43 @@
-# 验证方法与证据边界
+# 测试说明
 
-执行 make test；Windows 为 .\run.ps1 test。实际编译、运行、比较；失败非零退出，不是仅打印 PASS。
+运行 `make test`，或在 Windows 中运行 `.\run.ps1 test`。脚本依次完成 RTL 检查、模块仿真和指令差分测试；任一步失败都会返回非零退出码。
 
-## 检查层次
+## 测试内容
 
-1. Verilator -Wall lint，全 RTL，警告作为失败。
-2. Icarus 四态模块仿真：13,414 次运算结果比较、139 项缓存检查、10 项预测器检查。
-3. Verilator 周期执行 + Spike 差分：6 组冒烟；46 组主回归、33,003 次正常提交。
-4. 24 组基准：Python 独立整数期望值、CPU 中 C 结果验证、Spike 对照、全 RAM 比较。
+|测试|工具与方法|已有结果|
+|---|---|---|
+|RTL 检查|Verilator `-Wall`，警告按错误处理|全部 RTL 通过|
+|模块仿真|Icarus 四态仿真|13,414 次运算比较、139 项缓存检查、10 项预测器检查|
+|处理器回归|Verilator 执行，与 Spike 按提交记录比较|6 组冒烟；46 组主回归、33,003 次正常提交|
+|性能程序|独立期望值、C 结果检查、Spike 和 RAM 比较|24 组配置通过，单独运行 `make bench`|
 
-Spike 固定提交 f8a060b7bea8da6f738f193ed1b66b665978d092。Xsimd 插件独立用 C++ 标量定义语义，不调用 RTL；这是两份实现加测试，不是第三方 ISA 认证。
+Spike 固定在提交 `f8a060b7bea8da6f738f193ed1b66b665978d092`。Xsimd 参考扩展用 C++ 标量运算实现，不调用 RTL。
 
-## 比较对象
+## 比较方法
 
-逐条比较 PC、编码、rd、结果、下一 PC、load 地址、store 地址和有效字节，不只比较最终 a0。参考运行停在链接符号 test_end，检查确实到达，有超时和指令上限。
+每条正常提交都比较 PC、指令编码、目的寄存器、写回结果和下一 PC。访存指令还检查加载地址、存储地址及有效字节。Spike 运行到链接符号 `test_end` 时停止，脚本检查它是否到达，并设置超时和指令数上限。
 
-异常 cause/tval 按本工程执行环境单独检查，不混同 Spike M 模式异常。正常内存测试末尾 FENCE 后，重放 **Spike store** 得到期望值，与 RTL 后端全部 1 MiB RAM 比较。
+异常的 `cause`、`tval` 按 [本项目的执行环境](architecture.md) 检查。这里采用报告异常后停机的方式，未实现 Spike 的 M 模式异常处理流程。
 
-写回故障可能部分更新后端，故不做“所有旧 store 都已落盘”的错误断言，另检异常及模块级恢复。检测含 x0、异常无写入、缓存无重复标签/无效脏行等仿真断言。
+正常访存测试在结束前执行 FENCE。脚本根据 Spike 的存储记录计算期望内存，再与仿真后端的整个 1 MiB RAM 比较。写回故障测试允许后端已经完成部分写入，因此单独检查异常报告和模块级重试恢复。RTL 中还保留了 x0、异常写入、重复缓存标签和无效脏行等断言。
 
-## 覆盖
+## 回归用例
 
-- 45 条 I/M + FENCE + 3 条 SIMD 真实执行，动态计数在 regression-summary.json。
-- 算术边界、符号扩展、x0、六种分支、JALR 清 bit 0、M 除零/溢出。
-- 缓存/预测开关矩阵；固定延迟、确定性 ready 反压、响应抖动。
-- load-use、前递、除法依赖加载；冲刷路径不能写 MMIO/store 或触发年轻异常。
+- 45 条 I/M 指令、FENCE 和 3 条 SIMD 指令，动态执行次数记录在 `regression-summary.json`。
+- 算术边界值、符号扩展、x0、六种分支条件、JALR 清除 bit 0，以及 M 扩展的除零和溢出。
+- 缓存、预测器开关组合；固定延迟、请求反压和响应抖动。
+- load-use、前递、除法依赖加载，以及冲刷后的 MMIO、存储和异常指令。
 - 固定随机种子：1、7、42、73、101、257、65537、20261015。
-- 同组 LRU、脏置换、部分字节写、FENCE、旁路。
-- 填充/写回/FENCE 失败、模块级重试。
-- ECALL、EBREAK、非法、CSR/FENCE.I 不支持、未对齐、取指/数据错误。
-- 单独构建 ENABLE_SIMD=0，确认自定义编码非法。
+- 同组 LRU 替换、脏行置换、部分字节写入、FENCE 和旁路访问。
+- 缓存填充、写回及 FENCE 失败，故障后的模块级重试。
+- ECALL、EBREAK、非法编码、未支持的 CSR/FENCE.I、未对齐访问、取指和数据访问错误。
+- 单独构建 `ENABLE_SIMD=0` 的版本，检查自定义指令是否触发非法指令异常。
 
-这些是指令类型实际执行覆盖，不是代码行/翻转覆盖率，不等于遍历所有状态。尚未导入官方 riscv-arch-test 或形式化证明。
+统计中的覆盖范围是已执行的指令类型，不包含代码行覆盖率或翻转覆盖率。当前没有接入官方 riscv-arch-test，也未做形式化验证。
 
-Icarus 12 会打印 constant selects 的敏感表提示及仿真断言不可综合提示；这些不等于测试失败，仍须看最终比较结果和退出码。断言受 SYNTHESIS 条件保护。冒烟 ELF 的 RWX 段提示来自简化裸机链接脚本；本系统无内存权限保护，不应把这个程序当作受保护 OS 应用。
+## 除法依赖加载的问题
 
-## 真实缺陷记录
-
-随机种子 20261015 曾发现：
+种子 20261015 的随机测试曾触发一次结果不一致，缩小后的用例如下：
 
 ~~~asm
 li x6,1
@@ -46,14 +46,20 @@ lw x6,0(x28)       # 缓存未命中，内存为 0
 div x15,x17,x6
 ~~~
 
-旧 RTL 得到 1184，正确为 0xFFFFFFFF（除零）。DIV 提前锁存了旧 x6；组合 ALU 能等到执行时重算，迭代除法不会自动重采样。
+旧实现得到 1184，而正确结果应为 `0xFFFFFFFF`：加载完成后 x6 为 0，DIV 应返回除零结果。
 
-先缩成 div-load-hazard 重现失败，再让 div_start 等待 MEM 相关 load 返回。修复后最小用例和原随机种子均通过；用例保留。
+原因是除法器在加载返回前就锁存了旧 x6。组合 ALU 可以在等待期间重新接收前递值，迭代除法器则只在启动时采样。修复时给 `div_start` 增加了相关 load 就绪条件。最小用例 `div-load-hazard` 和原随机种子均已通过，保留在回归测试中。
 
-## 波形与 CI
+## 日志和波形
 
-make wave 生成 build/smoke.fst。GTKWave 先看 TOP.rv32_system 的 commit_*，再看 core.e_valid/m_valid/w_valid、ea/eb、load_hazard、div_start、redirect，以及 cache.state/word_index。
+Icarus 12 会打印 `constant selects` 的敏感表提示，以及仿真断言不可综合的提示。断言由 `SYNTHESIS` 条件保护；测试结果以比较记录和退出码为准。冒烟 ELF 的 RWX 段警告来自裸机链接脚本，本系统没有内存权限保护。
 
-CSV 的 cycle 为十进制，其余字段为十六进制。FST 每半周期增加 1 个仿真单位，不能直接说成实际 FPGA 纳秒。
+`make wave` 生成 `build/smoke.fst`。GTKWave 中常用的信号有：
 
-GitHub Actions 执行 doctor/test/bench/wave 并上传 JSON/CSV/FST。验收必须核对当前提交的结果，历史提交绿色不代表新代码通过。
+- `commit_*`：指令提交结果。
+- 核心中的 `e_valid/m_valid/w_valid`、`ea/eb`、`load_hazard`、`div_start`、`redirect`：流水级状态、前递和控制。
+- 缓存中的 `state`、`word_index`：访问状态和行内传输位置。
+
+CSV 中 `cycle` 为十进制，其余字段为十六进制。FST 每半周期增加 1 个仿真时间单位，未对应实际 FPGA 时钟周期。
+
+GitHub Actions 运行 `doctor/test/bench/wave`，并上传 JSON、CSV 和 FST。查看 CI 结果时，使用对应提交的运行记录。

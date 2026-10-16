@@ -34,9 +34,13 @@
 
 为 RTL 引擎设置独立英文临时目录，复制后续优化使用的 `elab.rtd` 后，完整 CPU 综合通过。DCP 保存时的附加元数据路径错误，通过将 `-tempDir` 参数中的反斜杠改为 `/` 消除；独立保存、重新打开 DCP 的复测无 ERROR，读回 32,785 个层次单元和一个 clk 约束。
 
+最终从 RTL 完整复跑的记录为 `build/synth/runs/20261016-143704-c8e8bddd/`：退出码 0、ERROR 数量 0、报告和 DCP 齐全、检查点回读通过。负向测试模拟“退出码 0、产物齐全但日志包含 ERROR”，脚本正确拒绝并恢复调用者的环境变量。
+
 本次综合使用 12,221 个 LUT、15,736 个触发器和 4 个 DSP，没有推断出 RAM。10ns 约束下 WNS 为 -5.763ns，尚未达到时序目标。资源和关键路径记录在 [设计报告](design-report.md)。
 
 综合脚本改为每次新建结果目录，并检查退出码、ERROR 日志、报告、DCP 和回读结果，避免使用旧的通过标记。`make doctor test bench wave` 再次通过，回归与性能 JSON 的 SHA-256 与修改前相同。此次未修改 RTL。
+
+提交 `815b13e` 的 [GitHub CI](https://github.com/gaog5844-ctrl/riscv-cpu-lab/actions/runs/38862404326) 通过。下载其验证产物后，`regression-summary.json` 和 `benchmarks.json` 与本机文件逐字节一致。CI 验证仿真和编译流程，不包含 Vivado 综合。
 
 ## 待办
 

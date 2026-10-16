@@ -63,6 +63,8 @@ wsl -d Ubuntu-24.04 --cd /mnt/d/Projects/riscv-cpu-lab -- gtkwave build/smoke.fs
 
 本机此前在模块展开后以 `0xC0000374` 退出。脚本为带非 ASCII 主机名的 Windows 环境设置独立英文 RTL 临时目录，并复制后续阶段所需的 `elab.rtd`。传给 Vivado 的临时路径统一使用 `/`，避免生成 Tcl 时将反斜杠解释成转义符。未改动计算机名、系统区域或 Vivado 安装文件。这一兼容处理使用内部参数，在 Vivado 2026.1 上验证；升级后需重新检查。
 
+本机的并行优化子进程仍不可用，Vivado 自动回退到单核继续运行。这一修复提供本工程可用的批处理综合路径，不等于修复了 Vivado 的所有并行或 GUI 工程问题。
+
 可通过 `LAB_VIVADO` 指定 `vivado.bat`，通过 `LAB_FPGA_PART` 指定已安装器件。也可以直接运行：
 
 ~~~powershell

@@ -55,6 +55,7 @@ def check_memory(binary, expected, dump):
             if BASE <= addr < BASE+RAM_SIZE:
                 memory[addr-BASE:addr-BASE+size] = (value & ((1 << (8*size))-1)).to_bytes(size,"little")
     actual = dump.read_bytes()
+    assert len(actual)==RAM_SIZE, (dump.name,"RAM dump size",len(actual),RAM_SIZE)
     if actual != memory:
         bad = next(i for i,(a,b) in enumerate(zip(actual,memory)) if a!=b)
         raise AssertionError(f"{dump.name}: physical RAM mismatch at {BASE+bad:08x}: "

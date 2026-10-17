@@ -51,7 +51,8 @@ module tb_cache;
         @(negedge clk);cpu_req_valid=0;
         wait(cpu_rsp_valid);#1;
         check(cpu_rsp_error===error_expected,"cache error mismatch");
-        if(strb==0 && !error_expected) check(cpu_rsp_data===expected,"cache read mismatch or X data");
+        if(strb==0 && !error_expected) check(cpu_rsp_data===expected,
+            $sformatf("cache read addr=%h got=%h expected=%h",addr,cpu_rsp_data,expected));
         hold_data=cpu_rsp_data;hold_transactions=transactions;
         repeat(3) begin
             @(negedge clk);
@@ -121,6 +122,50 @@ module tb_cache;
         access('h80000008,123,15,0,0);
         access('h80000008,0,0,123,0);
         check(memory[2]==123 && hits==0 && misses==0,"uncached bypass");
+        // Fault every beat of both eviction and FENCE writeback. Successful
+        // earlier beats stay in RAM; the complete dirty line must stay cached.
+        for(integer flushing_case=0;flushing_case<2;flushing_case++) begin
+            for(integer failed_word=0;failed_word<8;failed_word++) begin
+                restart(1);
+                for(integer w=0;w<8;w++) memory[w]=32'h10000000+w;
+                for(integer w=0;w<8;w++)
+                    access(32'h80000000+4*w,32'hbeef0000+w,15,0,0);
+                access('h80000200,0,0,memory[128],0); // other way; A becomes LRU
+                fail_write=1;fail_addr=32'h80000000+4*failed_word;
+                if(flushing_case) flush(1,fail_addr);
+                else access('h80000400,0,0,0,1);
+                check(dut.valid[0][0] && dut.dirty[0][0],"failed writeback lost dirty victim");
+                for(integer w=0;w<8;w++) begin
+                    check(memory[w]==(w<failed_word ? 32'hbeef0000+w : 32'h10000000+w),
+                          "partial writeback prefix differs from accepted successful beats");
+                    access(32'h80000000+4*w,0,0,32'hbeef0000+w,0);
+                end
+                fail_write=0;
+                flush(0,0);
+                for(integer w=0;w<8;w++) check(memory[w]==32'hbeef0000+w,"writeback retry lost data");
+            end
+        end
+        // Exercise the SCAN sentinel after all 32 cache lines, including set 15/way 1.
+        restart(1);
+        for(integer line=0;line<32;line++)
+            access(32'h80000000+32*line,32'hcafe0000+line,15,0,0);
+        flush(0,0);
+        check(writebacks==32,"FENCE did not visit all dirty lines");
+        for(integer line=0;line<32;line++)
+            check(memory[8*line]==32'hcafe0000+line,"FENCE skipped a line");
+        // Enable is a reset-time configuration, not a live bypass switch.
+        // A pin change must not expose stale RAM or resurrect a stale cached line.
+        $display("PASS writeback fault sweep: eviction/FENCE x 8 beats; all 32 FENCE lines");
+        restart(1);
+        access('h80000000,'h12345678,15,0,0);
+        @(negedge clk);enable=0;
+        access('h80000000,0,0,'h12345678,0);
+        flush(0,0);
+        restart(0);
+        access('h80000000,'h87654321,15,0,0);
+        @(negedge clk);enable=1;
+        access('h80000000,0,0,'h87654321,0);
+        check(hits==0 && misses==0,"reset-time disabled cache changed mode without reset");
         $display("PASS cache: %0d checks; backpressure, byte enables, dirty/refill/flush fault recovery",checks);
         $finish;
     end

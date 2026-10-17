@@ -50,7 +50,9 @@ if {[catch {synth_design -top rv32_system -part $part -mode out_of_context -flat
     return -options $options $failure
 }
 report_utilization -file [file join $output utilization.txt]
+report_utilization -hierarchical -file [file join $output hierarchy.txt]
 report_timing_summary -file [file join $output timing.txt]
+report_timing -max_paths 10 -path_type full -file [file join $output critical-paths.txt]
 set checkpoint [file join $output rv32_system.dcp]
 write_checkpoint -force $checkpoint
 close_design

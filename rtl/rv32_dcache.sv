@@ -28,6 +28,8 @@ module rv32_dcache (
         BYPASS_REQ,BYPASS_WAIT,RESPONSE,SCAN,FLUSH_DONE
     } state_t;
     state_t state;
+    // Reset-time configuration. Live pin changes cannot bypass dirty cached data.
+    logic enabled;
     logic [31:0] data[0:1][0:15][0:7];
     logic [22:0] tags[0:1][0:15];
     logic valid[0:1][0:15],dirty[0:1][0:15],lru[0:15];
@@ -76,6 +78,7 @@ module rv32_dcache (
 `endif
     always_ff @(posedge clk) begin
         if(reset) begin
+            enabled<=enable;
             state<=IDLE; address<=0; write_data<=0; strobe<=0;
             response_data<=0; response_error<=0; victim<=0; victim_set<=0;
             word_index<=0; refilled<=0; flushing<=0; scan_index<=0;
@@ -97,7 +100,7 @@ module rv32_dcache (
                         address<=cpu_req_addr; write_data<=cpu_req_wdata; strobe<=cpu_req_wstrb;
                         refilled<=0; response_error<=0; response_data<=0; flushing<=0;
                         // RAM 区域可缓存；MMIO 和越界访问永远旁路。
-                        state<=(enable && cpu_req_addr[31:20]==12'h800) ? LOOKUP : BYPASS_REQ;
+                        state<=(enabled && cpu_req_addr[31:20]==12'h800) ? LOOKUP : BYPASS_REQ;
                     end
                 end
                 LOOKUP: begin

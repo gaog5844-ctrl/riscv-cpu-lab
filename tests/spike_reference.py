@@ -64,9 +64,12 @@ def compare(trace_path, expected, terminal):
         actual = [{k:int(v,10 if k=="cycle" else 16) for k,v in row.items()}
                   for row in csv.DictReader(f)]
     assert actual and actual[-1]["trap"] and actual[-1]["pc"] == terminal, actual[-1:] 
+    assert all(actual[-1][key] == 0 for key in ("rd", "data", "mem_wstrb")), (
+        trace_path, "faulting retirement has a write", actual[-1])
     normal=actual[:-1]
     assert len(normal)==len(expected), (trace_path, len(normal), len(expected))
     for index,(a,b) in enumerate(zip(normal,expected)):
+        assert not a["trap"], (trace_path, index, "unexpected trap in normal prefix", a)
         for key in ("pc","insn","rd","data"):
             assert a[key]==b[key], (trace_path,index,key,a,b)
         next_pc=expected[index+1]["pc"] if index+1<len(expected) else terminal
@@ -77,6 +80,8 @@ def compare(trace_path, expected, terminal):
             assert len(b["stores"])==1, (trace_path,index,"missing Spike store",a,b)
             addr,value=b["stores"][0]
             size={0:1,1:2,2:4}[(a["insn"]>>12)&7]
+            expected_strobe=((1<<size)-1)<<(addr&3)
+            assert a["mem_wstrb"]==expected_strobe, (trace_path,index,"store byte enable",a,expected_strobe)
             mask=(1<<(8*size))-1
             assert addr==a["mem_addr"], (trace_path,index,"store address",a,b)
             assert ((a["mem_data"]>>(8*(addr&3)))&mask)==(value&mask), (trace_path,index,"store data",a,b)

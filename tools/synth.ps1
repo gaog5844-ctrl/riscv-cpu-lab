@@ -37,6 +37,12 @@ try {
     $env:LAB_SYNTH_OUTPUT=$run.Replace('\','/')
     $env:LAB_FPGA_PART=$Part
     $env:LAB_SYNTH_PERIOD_NS=$ClockPeriodNs.ToString([Globalization.CultureInfo]::InvariantCulture)
+    $sources=@(Get-ChildItem -LiteralPath (Join-Path $labRoot 'rtl') -Filter '*.sv')
+    $sources+=Get-Item -LiteralPath (Join-Path $labRoot 'tools/synth.tcl'),(Join-Path $labRoot 'tools/synth.ps1')
+    $fingerprints=@($sources | Sort-Object FullName | ForEach-Object {
+        [ordered]@{file=$_.FullName.Substring($labRoot.Length+1).Replace('\','/'); sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}
+    })
+    $fingerprints | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $run 'sources.json') -Encoding utf8
     $previous=Get-Date
     # Keep run artifacts separate; synth.tcl also overrides the RTL engine's temp paths.
     # Vivado embeds this argument in generated Tcl: backslashes become escapes.
@@ -44,7 +50,7 @@ try {
     & $Vivado -mode batch -tempDir $toolTemp -source tools/synth.tcl -notrace -log "$run/vivado.log" -journal "$run/vivado.jou"
     $toolExit=$LASTEXITCODE
     $missing=@()
-    foreach ($name in @('SYNTH_PASS.txt','rv32_system.dcp','utilization.txt','timing.txt')) {
+    foreach ($name in @('SYNTH_PASS.txt','rv32_system.dcp','utilization.txt','timing.txt','hierarchy.txt','critical-paths.txt')) {
         $path=Join-Path $run $name
         if (-not (Test-Path -LiteralPath $path)) { $missing+=$name; continue }
         $item=Get-Item -LiteralPath $path

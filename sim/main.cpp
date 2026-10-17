@@ -21,7 +21,7 @@ struct Transaction {
 };
 int main(int argc, char** argv) {
     try {
-        std::string image, output="build/trace.csv", wave, summary="build/stats.json", dump;
+        std::string image, output="build/trace.csv", wave, summary="build/stats.json", dump, bus_output;
         unsigned latency=1, jitter=0;
         uint32_t random_state=1, fault_address=0;
         bool fault_read=false,fault_write=false;
@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
             else if(arg=="--stats") summary=value();
             else if(arg=="--wave") wave=value();
             else if(arg=="--dump") dump=value();
+            else if(arg=="--bus-trace") bus_output=value();
             else if(arg=="--latency") latency=std::stoul(value());
             else if(arg=="--jitter") jitter=std::stoul(value());
             else if(arg=="--seed") random_state=std::stoul(value());
@@ -57,6 +58,12 @@ int main(int argc, char** argv) {
         std::ofstream trace(output);
         if(!trace) throw std::runtime_error("cannot open trace");
         trace<<"cycle,pc,insn,npc,rd,data,trap,cause,tval,mem_addr,mem_data,mem_wstrb\n";
+        std::ofstream bus;
+        if(!bus_output.empty()) {
+            bus.open(bus_output);
+            if(!bus) throw std::runtime_error("cannot open bus trace");
+            bus<<"cycle,port,address,wstrb\n";
+        }
         auto valid_addr=[](uint32_t addr) {return addr>=BASE && uint64_t(addr-BASE)+4<=RAM_SIZE;};
         auto read=[&](uint32_t addr) -> uint32_t {
             if(addr==0x10000004u) return 0; // 仿真 GPIO 输入
@@ -122,6 +129,11 @@ int main(int argc, char** argv) {
             top->eval();
             const bool ir=top->i_req_valid && top->i_req_ready;
             const bool dr=top->d_req_valid && top->d_req_ready;
+            if(!bus_output.empty()) {
+                if(ir) bus<<std::dec<<cycle<<",I,"<<std::hex<<top->i_req_addr<<",0\n";
+                if(dr) bus<<std::dec<<cycle<<",D,"<<std::hex<<top->d_req_addr<<','
+                          <<unsigned(top->d_req_wstrb)<<'\n';
+            }
             Transaction next_i{true,cycle+(ir?delay():latency),top->i_req_addr,0,0};
             Transaction next_d{true,cycle+(dr?delay():latency),top->d_req_addr,top->d_req_wdata,top->d_req_wstrb};
             if(top->commit_valid) {

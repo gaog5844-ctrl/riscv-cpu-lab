@@ -5,13 +5,19 @@ BUILD := build
 RTL_UNITS := rtl/rv32_alu.sv rtl/rv32_simd.sv rtl/rv32_div.sv
 RTL_CORE := $(RTL_UNITS) rtl/rv32_decode.sv rtl/rv32_bpu.sv rtl/rv32_core.sv
 RTL_SYSTEM := $(RTL_CORE) rtl/rv32_dcache.sv rtl/rv32_system.sv
-.PHONY: doctor unit test lint bench wave synth
+.PHONY: doctor unit test lint bench wave synth review oracle-test
 doctor:
 	@$(PYTHON) tools/doctor.py
-unit: $(BUILD)/tb_units $(BUILD)/tb_cache $(BUILD)/tb_bpu
+unit: $(BUILD)/tb_units $(BUILD)/tb_cache $(BUILD)/tb_bpu $(BUILD)/tb_simd_math $(BUILD)/simd-vectors.txt
 	vvp $(BUILD)/tb_units
 	vvp $(BUILD)/tb_cache
 	vvp $(BUILD)/tb_bpu
+	vvp $(BUILD)/tb_simd_math
+$(BUILD)/simd-vectors.txt: tests/simd_vectors.py
+	$(PYTHON) tests/simd_vectors.py
+$(BUILD)/tb_simd_math: rtl/rv32_simd.sv tests/unit/tb_simd_math.sv
+	mkdir -p $(BUILD)
+	iverilog -g2012 -s tb_simd_math -o $@ $^
 $(BUILD)/tb_cache: rtl/rv32_dcache.sv tests/unit/tb_cache.sv
 	mkdir -p $(BUILD)
 	iverilog -g2012 -s tb_cache -o $@ $^
@@ -47,7 +53,12 @@ diff: smoke $(BUILD)/xsimd.so
 	$(PYTHON) tests/spike_reference.py
 regression: $(BUILD)/obj/Vrv32_system $(BUILD)/obj-nosimd/Vrv32_system $(BUILD)/xsimd.so
 	$(PYTHON) tests/regression.py
-test: lint unit diff regression
+oracle-test:
+	$(PYTHON) -m unittest discover -s tests -p 'test_*.py' -v
+review: $(BUILD)/obj/Vrv32_system $(BUILD)/xsimd.so
+	$(PYTHON) tests/review_regression.py
+	$(PYTHON) tests/check_div_wave.py
+test: lint unit oracle-test diff regression review
 bench: $(BUILD)/obj/Vrv32_system $(BUILD)/xsimd.so
 	$(PYTHON) benchmarks/run.py
 wave: smoke

@@ -134,6 +134,9 @@ module rv32_core #(
         end
         alu_a=e.asel==1 ? e.pc : e.asel==2 ? 0 : ea;
         alu_b=e.bimm ? e.imm : eb;
+        // MULH: signed/signed; MULHSU: signed/unsigned; MULHU: unsigned/unsigned.
+        // MUL uses only low 32 bits, independent of signedness. 33-bit operands
+        // let one signed multiplier represent all three high-half operations.
         mul_a=$signed({(e.insn[14:12]==1 || e.insn[14:12]==2) && ea[31],ea});
         mul_b=$signed({e.insn[14:12]==1 && eb[31],eb});
         mul_result=mul_a*mul_b;
@@ -219,7 +222,9 @@ module rv32_core #(
         d_req_wdata=m_write_data;
     end
 `ifndef SYNTHESIS
+    initial assert(RESET_PC[1:0]==0) else $fatal(1,"RESET_PC must be 4-byte aligned");
     always_ff @(posedge clk) if(!reset) begin
+        if(i_req_valid) assert(i_req_addr[1:0]==0) else $fatal(1,"unaligned fetch request");
         assert(regs[0]==0) else $fatal(1,"x0 changed");
         assert(!(m_valid && m.load && m.store)) else $fatal(1,"MEM is both load and store");
         assert(!(commit_valid && commit_trap && (commit_rd!=0 || commit_mem_wstrb!=0)))

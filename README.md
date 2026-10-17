@@ -19,6 +19,8 @@ SystemVerilog 实现的五级 RV32IM 处理器，带 1KB 数据缓存、动态�
 
 顶层为 [`rv32_system`](rtl/rv32_system.sv)，由处理器核心和数据缓存组成。RAM、MMIO 及程序加载由仿真环境提供；开发板尚未确定。
 
+缓存使能在复位时锁存，不支持运行中切换。保留 RAM 内容并重启前需完成 FENCE；写回错误会报告异常，已写入后端的字不回滚。接口约定见 [处理器结构](docs/architecture.md)。
+
 ## 开始运行
 
 Windows 需要名为 `Ubuntu-24.04` 的 WSL 发行版。首次使用：
@@ -52,7 +54,7 @@ make test
 
 Linux / WSL 中使用 `make doctor`、`make test` 等同名目标。仿真不依赖 Vivado。
 
-Vivado 2026.1 裸核综合使用 `xc7a35tcsg324-1`：12,221 LUT、15,736 FF、4 DSP。10ns 约束下 WNS 为 -5.763ns，未满足时序目标；尚未布局布线和上板。
+Vivado 2026.1 裸核综合使用 `xc7a35tcsg324-1`：12,566 LUT、15,731 FF、4 DSP。10ns 约束下 WNS 为 -5.763ns，未满足时序目标；尚未布局布线和上板。
 
 ## SIMD 性能
 
@@ -70,7 +72,7 @@ Vivado 2026.1 裸核综合使用 `xc7a35tcsg324-1`：12,221 LUT、15,736 FF、4 
 
 回归测试按指令比较 RTL 与 Spike 的 PC、编码、写回值、下一 PC 和访存记录。正常访存用例还会在 FENCE 后比较整个 1MiB RAM。
 
-目前有 46 组主回归配置、6 组冒烟配置和 24 组性能配置。模块测试覆盖运算单元、缓存和预测器。测试方法、异常约定和已知缺陷记录见 [测试说明](docs/verification.md)；尚未接入官方架构测试套件或形式化验证。
+目前有 46 组主回归、25 组审查补充回归、6 组冒烟和 24 组性能配置。另有比较器负向测试、68,683 组独立 SIMD 数学对照，以及缓存逐字故障与恢复检查。测试方法和异常约定见 [测试说明](docs/verification.md)；尚未接入官方架构测试套件或形式化验证。
 
 ## 代码与文档
 
@@ -79,7 +81,7 @@ Vivado 2026.1 裸核综合使用 `xc7a35tcsg324-1`：12,221 LUT、15,736 FF、4 
 | `rtl/` | 核心、译码、运算单元、缓存和预测器 |
 | `sim/` | Verilator 驱动及 Spike 自定义指令扩展 |
 | `tests/` | 模块测试、汇编用例和随机回归 |
-| `sw/` | 启动代码、链接脚本、SIMD C 接口 |
+| `sw/` | SIMD C 接口头文件（`include/xsimd.h`） |
 | `benchmarks/` | 点积、数组加法和矩阵向量乘测试 |
 | `tools/` | 安装、环境检查及综合脚本 |
 
@@ -88,6 +90,7 @@ Vivado 2026.1 裸核综合使用 `xc7a35tcsg324-1`：12,221 LUT、15,736 FF、4 
 - [SIMD 编码与 C 接口](docs/xsimd.md)
 - [首次运行与代码阅读](docs/first-lab.md)
 - [开发记录](docs/implementation.md)
+- [审查意见核对与处理](docs/review-response.md)
 
 ## 来源与许可
 

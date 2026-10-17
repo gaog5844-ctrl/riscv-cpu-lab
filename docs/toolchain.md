@@ -59,7 +59,7 @@ wsl -d Ubuntu-24.04 --cd /mnt/d/Projects/riscv-cpu-lab -- gtkwave build/smoke.fs
 
 原报告使用的 `xc7k325tffg900-2` 器件支持未安装，Vivado 返回 `No parts matched`。`synth.tcl` 因此默认使用已安装的 `xc7a35tcsg324-1` 做综合检查，该器件不是原报告中的板卡目标。
 
-2026-10-16 已生成 `rv32_system` 的综合网表并通过 DCP 回读检查。综合占用 12,221 个 LUT、15,736 个触发器和 4 个 DSP；10ns 约束下 WNS 为 -5.763ns，未满足时序目标。详细结果见 [设计报告](design-report.md)。
+2026-10-16 第二轮修改后重新生成 `rv32_system` 的综合网表并通过 DCP 回读检查。综合占用 12,566 个 LUT、15,731 个触发器和 4 个 DSP；10ns 约束下 WNS 为 -5.763ns，未满足时序目标。详细结果见 [设计报告](design-report.md)。
 
 本机此前在模块展开后以 `0xC0000374` 退出。脚本为带非 ASCII 主机名的 Windows 环境设置独立英文 RTL 临时目录，并复制后续阶段所需的 `elab.rtd`。传给 Vivado 的临时路径统一使用 `/`，避免生成 Tcl 时将反斜杠解释成转义符。未改动计算机名、系统区域或 Vivado 安装文件。这一兼容处理使用内部参数，在 Vivado 2026.1 上验证；升级后需重新检查。
 
@@ -72,6 +72,8 @@ wsl -d Ubuntu-24.04 --cd /mnt/d/Projects/riscv-cpu-lab -- gtkwave build/smoke.fs
 ~~~
 
 每次综合使用独立的 `build/synth/runs/<run-id>/`，`build/synth/result.json` 指向最近结果。只有退出码为 0、日志无 ERROR、本次报告及检查点非空、DCP 重新打开并通过检查，脚本才报告成功。综合成功不要求 WNS 为正；时序是否满足需另看 `timing.txt`。
+
+第二轮增加 `hierarchy.txt`（层次资源）、`critical-paths.txt`（十条建立时间路径）和 `sources.json`（本次 RTL 与综合脚本 SHA-256）。将报告用于后续版本时，需先确认这些输入指纹仍与源码一致。
 
 尚未完成布局布线或上板测试。板级工程还需要具体开发板的时钟、引脚、电平、存储器和外设资料。
 
